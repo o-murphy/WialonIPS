@@ -1,8 +1,8 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Union, NamedTuple, get_type_hints
 
 
 class PacketType(str, Enum):
@@ -93,13 +93,122 @@ LBS_CELL_ID_PARAM = "cell_id%d"
 WIFI_MAC_PARAM = "wifi_mac_%d"
 WIFI_RSSI_PARAM = "wifi_rssi_%d"
 
+ParamValueTypes = {
+    1: int,
+    2: float,
+    3: str,
+}
+
+
+def parse_datetime(date_str: str, time_str: str) -> datetime:
+    """Convert YYMMDD and HHMMSS into a datetime object."""
+    return datetime.strptime(date_str + time_str, "%y%m%d%H%M%S")
+
+
+def dms_to_decimal(deg_min: str, sign: Union[Literal['N', 'S'], Literal['E', 'W']]) -> float:
+    """Convert a coordinate in DDMM.MMMM format to decimal degrees."""
+    if len(deg_min) < 6:
+        raise ValueError("Invalid coordinate format")
+
+    # Determine number of degrees (2 digits for latitude, 3 for longitude)
+    deg_length = 2 if sign in "NS" else 3
+
+    # Split degrees and minutes
+    degrees = int(deg_min[:deg_length])
+    minutes = float(deg_min[deg_length:])
+
+    # Convert to decimal degrees
+    decimal = degrees + (minutes / 60)
+
+    # Apply sign for South/West
+    if sign in "SW":
+        decimal = -decimal
+
+    return decimal
+
+
+class Position(NamedTuple):
+    latitude: float
+    longitude: float
 
 @dataclass
-class Packet:
+class DevPacket:
     Type: Optional[PacketType] = None
     Code: Optional[Any] = None
-    Body: Optional[Any] = None
     RAW: Optional[bytes] = None
+
+    imei: Optional[str] = None
+    password: Optional[str] = None
+
+    date: Optional[int] = None
+    time: Optional[int] = None
+    lat_deg: Optional[float] = None
+    lat_sign: Optional[Literal['N', 'S']] = None
+    lon_deg: Optional[float] = None  # GGGMM.MM
+    lon_sign: Optional[Literal['E', 'W']] = None
+    speed: Optional[int] = None
+    course: Optional[int] = None
+    alt: Optional[int] = None
+    sats: Optional[int] = None
+
+    hdop: Optional[float] = 1.0
+    inputs: Optional[int] = None
+    outputs: Optional[int] = None
+    adc: Optional[list[float]] = ""
+    ibutton: Optional[str] = None
+    alarm: bool = False
+
+    params: Optional[dict[str, str]] = None
+
+    def __post_init__(self):
+        self._parse_params()
+        self._parse_adc()
+
+    def _parse_adc(self):
+        if self.adc and isinstance(self.adc, str):
+            self.adc = [float(adc) for adc in self.adc.split(",")]
+
+    def _parse_params(self) -> None:
+        if self.params and isinstance(self.params, str):
+            params = self.params.split(",")
+            _params = {}
+
+            for param in params:
+                key, typ, value = param.split(":")
+
+                if typ.isdigit() and (_typ := ParamValueTypes.get(int(typ))):
+                    try:
+                        _params[key] = None if value == NOT_AVAILABLE else _typ(value)
+                    except TypeError:
+                        _params[key] = value
+
+            if ALARM_PARAM in _params:
+                self.alarm = True
+                _params.pop(ALARM_PARAM)
+
+            self.params = _params
+
+        else:
+            self.params = None
+
+    @property
+    def datetime(self):
+        if self.date and self.time:
+            return parse_datetime(str(self.date), str(self.time))
+        raise ValueError("Unable to parse date and time")
+
+    @property
+    def pos(self):
+        if self.lat_deg and self.lat_sign and self.lon_deg and self.lon_sign:
+            return Position(
+                dms_to_decimal(str(self.lat_deg), self.lat_sign),
+                dms_to_decimal(str(self.lon_deg), self.lon_sign),
+            )
+
+
+
+
+
 
 
 def _stringify(object):
@@ -215,15 +324,89 @@ class Protocol:
         crc = b""  # TODO:
         return packet + crc + b"\r\n"
 
-    def parse_packet(self, packet: bytes) -> Optional[Packet]:
+    def parse_incoming_packet(self, packet: bytes) -> Optional[DevPacket]:
         try:
             _packet = packet.decode('ascii')
         except UnicodeDecodeError:
-            return Packet(None, LoginResponseCode.ERROR, None, packet)
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
 
-        match = re.match("#(\w+)#(\d+(.\d)?)?", _packet, re.IGNORECASE)
+        match = re.match(r"#(\w+)#(.*)\r\n", _packet, re.IGNORECASE)
         if not match:
-            return Packet(None, LoginResponseCode.ERROR, _packet, packet)
+            print("Couldn't parse incoming packet")
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
+
+        typ, params, *other = match.groups()
+        _params: list[str] = [None if value == NOT_AVAILABLE else value for value in params.split(";")]
+
+        try:
+            _typ = PacketType(typ)
+        except KeyError:
+            return DevPacket(None, None, packet)
+
+
+        if _typ == PacketType.DEV_LOGIN:
+            format_ = NamedTuple("LoginPacket", [
+                ('imei', str),
+                ("password", str)
+            ])
+
+        elif _typ == PacketType.DEV_EXTENDED_DATA:
+            format_ = NamedTuple("FullDataPacket", [
+                ('date', int),
+                ("time", int),
+                ("lat_deg", int),
+                ("lat_sign", str),
+                ("lon_deg", int),
+                ("lon_sign", str),
+                ("speed", int),
+                ("course", int),
+                ("alt", int),
+                ("sats", int),
+                ("hdop", int),
+                ("inputs", int),
+                ("outputs", int),
+                ("adc", int),
+                ("ibutton", int),
+                ("params", int),
+            ])
+
+        elif _typ == PacketType.DEV_SHORT_DATA:
+            format_ = NamedTuple("FullDataPacket", [
+                ('date', int),
+                ("time", int),
+                ("lat_deg", int),
+                ("lat_sign", str),
+                ("lon_deg", int),
+                ("lon_sign", str),
+                ("speed", int),
+                ("course", int),
+                ("alt", int),
+                ("sats", int),
+            ])
+
+        elif _typ == PacketType.DEV_PING:
+            format_ = NamedTuple("PingPacket", [])
+
+        # elif _typ == PacketType.DEV_BLACKBOX:
+        #     print(params.split("|"))
+        #     params =
+
+        else:
+            format_ = NamedTuple("UndefinedPacket", [])
+
+        _kwargs = format_(*_params)._asdict()
+
+        return DevPacket(_typ, None, packet, **_kwargs)
+
+    def parse_upcoming_packet(self, packet: bytes) -> Optional[DevPacket]:
+        try:
+            _packet = packet.decode('ascii')
+        except UnicodeDecodeError:
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
+
+        match = re.match(r"#(\w+)#(\d+(.\d)?)?", _packet, re.IGNORECASE)
+        if not match:
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
 
         typ, code, subcode, *other = match.groups()
         print(typ, code, subcode, *other)
@@ -231,12 +414,14 @@ class Protocol:
         try:
             _typ = PacketType(typ)
         except KeyError:
-            return Packet(None, None, _packet, packet)
+            return DevPacket(None, None, packet)
 
         if _typ == PacketType.SRV_EXTENDED_DATA_RESPONSE:
             code = ExtendedDataResponseCode(code)
 
         elif _typ == PacketType.SRV_SHORT_DATA_RESPONSE:
+            print(other.split(";"))
+
             code = ShortDataResponseCode(code)
 
         elif _typ == PacketType.SRV_LOGIN_RESPONSE:
@@ -245,13 +430,14 @@ class Protocol:
         elif _typ == PacketType.SRV_BLACKBOX_RESPONSE:
             code = code
 
-        return Packet(_typ, code, _packet, packet)
+        return DevPacket(_typ, code, packet)
 
 
-p = Protocol()
-r = p.parse_packet(b"#AD#15.1\r\n")
-print(r)
-r = p.parse_packet(b"#AL#1\r\n")
-print(r)
-r = p.parse_packet(b'#AB#\r\n')
-print(r)
+if __name__ == "__main__":
+    p = Protocol()
+    r = p.parse_upcoming_packet(b"#AD#15.1\r\n")
+    print(r)
+    r = p.parse_upcoming_packet(b"#AL#1\r\n")
+    print(r)
+    r = p.parse_upcoming_packet(b'#AB#\r\n')
+    print(r)
