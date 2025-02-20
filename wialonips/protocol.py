@@ -84,7 +84,7 @@ class ShortDataResponseCode(str, Enum):
 
 SEPARATOR = ";"
 NOT_AVAILABLE = "NA"
-SOS_PARAM = "SOS"
+ALARM_PARAM = "SOS"
 LBS_MMC_PARAM = "mcc%d"
 LBS_MNC_PARAM = "mnc%d"
 LBS_LAC_PARAM = "lac%d"
@@ -131,6 +131,7 @@ class Protocol:
                           outputs: Optional[int] = None,
                           adc: Optional[list[float]] = "",
                           ibutton: Optional[str] = None,
+                          alarm: bool = False,
                           **params,
                           ):
 
@@ -151,6 +152,9 @@ class Protocol:
 
         if adc:
             adc = ",".join([_stringify(i) for i in adc])
+
+        if alarm:
+            params[ALARM_PARAM] = 1
 
         params = ','.join([f"{_stringify(k)}:{_stringify(v)}" for k, v in params.items()])
 
