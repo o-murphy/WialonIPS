@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any
+from typing import Optional, Any, Literal
 
 
 class PacketType(str, Enum):
@@ -56,6 +56,7 @@ class LoginResponseCode(str, Enum):
     ERROR = "0"
     AUTH_ERROR = "01"
     CRC_ERROR = "10"
+
 
 class ExtendedDataResponseCode(str, Enum):
     STRUCT_ERROR = "-1"
@@ -118,10 +119,10 @@ class Protocol:
 
     def build_data_packet(self,
                           date_time: Optional[datetime] = None,
-                          lat_deg: Optional[float] = None,
-                          lat_sign=None,
-                          lon_deg: Optional[float] = None,
-                          lon_sing=None,
+                          lat_deg: Optional[float] = None,  # GGMM.MM
+                          lat_sign=Optional[Literal['N', 'S']],
+                          lon_deg: Optional[float] = None,  # GGGMM.MM
+                          lon_sing=Optional[Literal['E', 'W']],
                           speed: Optional[int] = None,
                           course: Optional[int] = None,
                           alt: Optional[int] = None,
