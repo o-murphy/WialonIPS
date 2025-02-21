@@ -20,11 +20,11 @@ from wialonips.protocol import PacketType, DevPacket, Protocol
     #     HOST = "193.193.165.165"
     #     PORT = 20332
 
-HOST = "127.0.0.1"
-PORT = 65432
+# HOST = "127.0.0.1"
+# PORT = 65432
 
-# HOST = "193.193.165.165"
-# PORT = 20332
+HOST = "193.193.165.165"
+PORT = 20332
 
 IMEI = "wips"
 PASSWORD = "wips"
