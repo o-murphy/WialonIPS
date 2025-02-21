@@ -15,7 +15,7 @@ PORT = 20332
 IMEI = "wips"
 PASSWORD = "wips"
 
-INCOMING_PACKET_FORMAT = "#{type}#{params}{crc}\r\n"
+INCOMING_PACKET_FORMAT = "#{type}#{params};{crc}\r\n"
 
 login_body = ";".join(["2.0", IMEI, PASSWORD]).encode('ascii')
 
