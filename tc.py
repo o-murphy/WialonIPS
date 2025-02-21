@@ -17,7 +17,7 @@ PASSWORD = "wips"
 
 INCOMING_PACKET_FORMAT = "#{type}#{params}{crc}\r\n"
 
-login_body = (";".join(["2.0", IMEI, PASSWORD]) + ";").encode('ascii')
+login_body = ";".join(["2.0", IMEI, PASSWORD, ""]).encode('ascii')
 print(login_body)
 login_packet = {
     'type': PacketType.DEV_LOGIN.value,
