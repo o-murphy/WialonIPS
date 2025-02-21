@@ -10,7 +10,7 @@ from wialonips.protocol import Protocol, PacketType, DevPacket
 class DeviceCredentials:
     IMEI: str
     PASSWORD: Optional[str] = None
-    PROTOCOL_VERSION: str = "2.0"
+    PROTOCOL_VERSION: str = "2.2"
 
 
 @dataclass

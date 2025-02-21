@@ -184,7 +184,7 @@ def _stringify(object):
 
 class Protocol:
 
-    def __init__(self, version="2.0"):
+    def __init__(self, version="2.2"):
         self.version = version
 
     def build_login_packet(self, imei, password):

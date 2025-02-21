@@ -6,7 +6,7 @@ from typing import Optional
 class Device:
     IMEI: str
     PASSWORD: Optional[str] = None
-    PROTOCOL_VERSION: str = "2.0"
+    PROTOCOL_VERSION: str = "2.2"
 
     def __post_init__(self):
         ...
