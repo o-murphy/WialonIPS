@@ -71,8 +71,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 outputs=0b_0000_0000_0000_0000_0000_0100_0001_0000,
                 mmc1="255",
                 mnc1="01",
-                lac0="0",
-                cell_id0="0",
+                lac1="0",
+                cell_id1="0",
                 battery=70,
             )
             client_socket.send(data_body)
