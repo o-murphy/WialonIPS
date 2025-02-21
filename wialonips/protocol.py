@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any, Union, Dict, List
 
-from wialonips.crc16 import crc16, crc16_to_ascii_hex
+from wialonips.crc16 import crc16
 from wialonips.types import *
 from wialonips.utils import parse_datetime, dms_to_decimal, decimal_to_ddmm
 
@@ -192,18 +192,17 @@ class Protocol:
 
     def build_data_packet(self,
                           date_time: Optional[datetime] = None,
-                          lat_deg: Optional[float] = None,  # GGMM.MM
-                          lat_sign=Optional[LAT_SIGN],
-                          lon_deg: Optional[float] = None,  # GGGMM.MM
-                          lon_sing=Optional[LON_SIGN],
+                          lat: Optional[float] = None,
+                          lon: Optional[float] = None,
                           speed: Optional[int] = None,
                           course: Optional[int] = None,
                           alt: Optional[int] = None,
                           sats: Optional[int] = None,
-                          hdop: Optional[float] = 1.0,
+                          # hdop: Optional[float] = 1.0,
+                          hdop: Optional[float] = None,
                           inputs: Optional[int] = None,
                           outputs: Optional[int] = None,
-                          adc: Optional[list[float]] = "",
+                          adc: Optional[list[float]] = None,
                           ibutton: Optional[str] = None,
                           alarm: bool = False,
                           **params,
@@ -215,14 +214,21 @@ class Protocol:
         else:
             date, time = None, None
 
-        if not (0 <= course < 360):
-            raise ValueError("Course must be between 0 and 360")
+        if course is not None and not (0 <= course < 360):
+            course = None
 
         if speed is not None and speed < 0:
-            raise ValueError("Speed must be positive")
+            speed = None
 
         if sats is not None and sats < 0:
-            raise ValueError("Sats must be positive")
+            sats = None
+
+        if lat is None or lon is None:
+            lat_deg, lon_deg = None, None
+            lat_sign, lon_sign = None, None
+        else:
+            lat_deg, lat_sign = decimal_to_ddmm(lat, True)
+            lon_deg, lon_sign = decimal_to_ddmm(lon, False)
 
         if adc:
             adc = ",".join([_stringify(i) for i in adc])
@@ -230,10 +236,19 @@ class Protocol:
         if alarm:
             params[ALARM_PARAM] = 1
 
-        params = ','.join([f"{_stringify(k)}:{_stringify(v)}" for k, v in params.items()])
+        def param_type(param):
+            if isinstance(param, str):
+                return 3
+            if isinstance(param, int):
+                return 1
+            if isinstance(param, float):
+                return 2
+            return 0
+
+        params = ','.join([f"{_stringify(k)}:{param_type(v)}:{_stringify(v)}" for k, v in params.items()])
 
         data = [_stringify(i) for i in (
-            date, time, lat_deg, lat_sign, lon_deg, lon_sing,
+            date, time, lat_deg, lat_sign, lon_deg, lon_sign,
             speed, course, alt, sats,
             hdop, inputs, outputs, adc, ibutton,
             params
@@ -281,7 +296,7 @@ class Protocol:
         return self.build_packet(PacketType.DEV_BLACKBOX, data=[data])
 
     def build_packet(self, packet_type: PacketType, data=None) -> bytes:
-        header = f"#{packet_type}#"
+        header = f"#{packet_type.value}#"
         body = (SEPARATOR.join(data) + ";").encode()
         crc = DevPacket.crc_body(body)
         return header.encode("ascii") + body + crc + b"\r\n"

@@ -1,4 +1,4 @@
-import sys
+import random
 import socket
 import time
 from datetime import datetime
@@ -6,26 +6,14 @@ from datetime import datetime
 import geocoder
 
 from wialonips.crc16 import crc16
-from wialonips.protocol import PacketType, DevPacket, Protocol
-
-
-
-
-# if __name__ == '__main__':
-
-    # if "--localhost" in sys.argv:
-    #     HOST = "127.0.0.1"
-    #     PORT = 65432
-    #
-    # else:
-    #     HOST = "193.193.165.165"
-    #     PORT = 20332
+from wialonips.protocol import PacketType, Protocol
 
 # HOST = "127.0.0.1"
 # PORT = 65432
 
 HOST = "193.193.165.165"
 PORT = 20332
+# PORT = 20963
 
 IMEI = "wips"
 PASSWORD = "wips"
@@ -60,10 +48,34 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             g = geocoder.ip('me')
             lat, lon = g.latlng
             dt = datetime.now()
-            data_body = Protocol().build_short_data_packet(dt, lat, lon, 0, 0, 100, 7)
-
+            # data_body = Protocol().build_short_data_packet(dt, lat, lon, 0, 0, 100, 7)
+            data_body = Protocol().build_data_packet(
+                date_time=dt,
+                lat=lat,
+                lon=lon,
+                speed=random.randint(0, 140),
+                course=random.randint(0, 359),
+                alt=100,
+                sats=random.randint(7, 20),
+                alarm=False,
+                hdop=random.randint(1, 10),
+                adc=[random.random(), random.random()],
+                param1=random.randint(1, 10),
+                param2=random.randint(1, 10),
+                param3=random.randrange(1, 10),
+                # text="Message from driver",
+                text1="sample text",
+                ibutton="wipsdriver",
+                inputs=0b_0000_0000_0000_0000_0000_0100_0000_0010,
+                outputs=0b_0000_0000_0000_0000_0000_0100_0001_0000,
+                mmc1="255",
+                mnc1="01",
+                lac0="0",
+                cell_id="0",
+            )
+            print(data_body)
             client_socket.send(data_body)
             data = client_socket.recv(1024)
-            time.sleep(3)
+            time.sleep(20)
 
 print(f"Received from server: {data.decode()}")
