@@ -69,7 +69,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 ibutton="wipsdriver",
                 inputs=0b_0000_0000_0000_0000_0000_0100_0000_0010,
                 outputs=0b_0000_0000_0000_0000_0000_0100_0001_0000,
-                mmc1="255",
+                mcc1="255",
                 mnc1="01",
                 lac1="0",
                 cell_id1="0",
