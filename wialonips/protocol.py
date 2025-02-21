@@ -289,7 +289,10 @@ class Protocol:
         header = f"#{packet_type}#"
         body = (SEPARATOR.join(data) + ";").encode()
 
-        crc = DevPacket.crc_body(body)
+        # crc = DevPacket.crc_body(body)
+
+        crc = crc16(body)
+        crc = f"{crc:0X}".encode("ascii")
         return header.encode("ascii") + body + crc + b"\r\n"
 
     def parse_incoming_packet_from_dev(self, packet: bytes) -> Optional[DevPacket]:
