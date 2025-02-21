@@ -40,9 +40,10 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
     client_socket.send(
         login_packet
     )  # Send data
-    print("Sent")
+    print(">>>", login_packet)
     data = client_socket.recv(1024)  # Receive response
-    print("Received", data)
+    print("<<<", data)
+
     if data == b'#AL#1\r\n':
         while True:
             g = geocoder.ip('me')
@@ -72,10 +73,12 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 mnc1="01",
                 lac0="0",
                 cell_id="0",
+                battery=70,
             )
-            print(data_body)
             client_socket.send(data_body)
+            print(">>>", data_body)
             data = client_socket.recv(1024)
+            print("<<<", data)
             time.sleep(20)
 
 print(f"Received from server: {data.decode()}")
