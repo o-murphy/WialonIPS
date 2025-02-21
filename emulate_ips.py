@@ -46,8 +46,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
 
     if data == b'#AL#1\r\n':
         while True:
-            g = geocoder.ip('me')
-            lat, lon = g.latlng
+            try:
+                g = geocoder.ip('me')
+                lat, lon = g.latlng
+            except Exception as e:
+                lat, lon = None, None
             dt = datetime.now()
             # data_body = Protocol().build_short_data_packet(dt, lat, lon, 0, 0, 100, 7)
             data_body = Protocol().build_data_packet(
