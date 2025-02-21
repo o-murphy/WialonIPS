@@ -5,7 +5,7 @@ from typing import Literal, NamedTuple
 LAT_SIGN = Literal['N', 'S']
 LON_SIGN = Literal['E', 'W']
 
-INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)(0x[0-9a-fA-F]+)?\r\n$"
+INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)(;(0x[0-9a-fA-F]+))?\r\n$"
 INCOMING_PACKET_REGEX = re.compile(INCOMING_PACKET_PATTERN, re.IGNORECASE)
 
 SEPARATOR = ";"
@@ -28,8 +28,11 @@ ParamValueTypes = {
     3: str,
 }
 
+class UndefinedPacket(NamedTuple):
+    pass
 
 class LoginBody(NamedTuple):
+    protocol_version: str
     imei: str
     password: str
 

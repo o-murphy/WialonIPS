@@ -6,11 +6,11 @@ import geocoder
 
 from wialonips.protocol import PacketType, DevPacket, Protocol
 
-HOST = "193.193.165.165"
-PORT = 20332
+# HOST = "193.193.165.165"
+# PORT = 20332
 
-# HOST = "127.0.0.1"
-# PORT = 65432
+HOST = "127.0.0.1"
+PORT = 65432
 
 IMEI = "wips"
 PASSWORD = "wips"
@@ -18,7 +18,7 @@ PASSWORD = "wips"
 INCOMING_PACKET_FORMAT = "#{type}#{params}{crc}\r\n"
 
 login_body = (";".join(["2.0", IMEI, PASSWORD]) + ";").encode('ascii')
-
+print(login_body)
 login_packet = {
     'type': PacketType.DEV_LOGIN.value,
     'params': login_body.decode('ascii'),

@@ -10,6 +10,7 @@ from wialonips.utils import parse_datetime, dms_to_decimal, decimal_to_ddmm
 @dataclass
 class DevPacket:
     type: PacketType
+    protocol_version: Optional[int] = None
     code: Optional[Any] = None
     raw: Optional[bytes] = None
 
@@ -56,12 +57,13 @@ class DevPacket:
             print("Couldn't parse incoming packet")
             return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
 
-        typ, body, crc = match.groups()
+        typ, body, _, crc = match.groups()
         print(typ, body, crc)
 
         # if self.version.startswith("2") and crc is not None:
         if crc is not None:
-            cls.crc_check(body.encode('ascii'), crc.encode('ascii'))
+            print(body.encode('ascii'), crc.encode('ascii'))
+            cls.crc_check((body+";").encode('ascii'), crc.encode('ascii'))
 
         params: list[str] = [None if value == NOT_AVAILABLE else value for value in body.split(";")]
 
@@ -87,11 +89,11 @@ class DevPacket:
         #     params =
 
         else:
-            format_ = NamedTuple("UndefinedPacket", [])
+            format_ = UndefinedPacket
 
         _kwargs = format_(*params)._asdict()
-
-        return cls(_typ, None, packet, **_kwargs)
+        print(_kwargs)
+        return cls(type=_typ, code=None, raw=packet, **_kwargs)
 
     @classmethod
     def crc_check(cls, body: bytes, expected_crc: bytes):
