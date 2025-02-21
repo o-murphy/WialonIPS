@@ -40,6 +40,8 @@ login_packet = {
     'params': login_body.decode('ascii'),
     'crc': f"{crc16(login_body):0X}"
 }
+# ('L', '2.0;wips;wips', '2.0;wips;wips', None)
+# ('L', '2.0;wips;wips;', '2.0;wips;wips', '1C7C')
 
 login_packet = INCOMING_PACKET_FORMAT.format(**login_packet).encode('ascii')
 print(login_packet)

@@ -49,28 +49,28 @@ class DevPacket:
         try:
             _packet = packet.decode('ascii')
         except UnicodeDecodeError:
-            return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
+            return DevPacket(type=PacketType.UNKNOWN, code=LoginResponseCode.ERROR, raw=packet)
 
         match = INCOMING_PACKET_REGEX.fullmatch(_packet)
 
         if not match:
             print("Couldn't parse incoming packet")
-            return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
+            return cls(PacketType.UNKNOWN, code=LoginResponseCode.ERROR, raw=packet)
 
         # typ, body, _, crc = match.groups()
-        typ, body, crc = match.groups()
-        print(typ, body, crc)
+        typ, body, _params, crc = match.groups()
+        print(typ, body, _params, crc)
 
         # if self.version.startswith("2") and crc is not None:
         if crc is not None:
-            cls.crc_check((body+";").encode('ascii'), crc.encode('ascii'))
+            cls.crc_check(body.encode('ascii'), crc.encode('ascii'))
 
-        params: list[str] = [None if value == NOT_AVAILABLE else value for value in body.split(";")]
+        params: list[str] = [None if value == NOT_AVAILABLE else value for value in _params.split(";")]
 
         try:
             _typ = PacketType(typ)
         except KeyError:
-            return cls(PacketType.UNKNOWN, None, packet)
+            return cls(PacketType.UNKNOWN, code=None, raw=packet)
 
         if _typ == PacketType.DEV_LOGIN:
             format_ = LoginBody
@@ -92,18 +92,17 @@ class DevPacket:
             format_ = UndefinedPacket
 
         _kwargs = format_(*params)._asdict()
-        print(_kwargs)
-        return cls(type=_typ, code=None, raw=packet, **_kwargs)
+        return cls(_typ, code=None, raw=packet, **_kwargs)
 
     @classmethod
     def crc_check(cls, body: bytes, expected_crc: bytes):
+        print(cls.crc_body(body), expected_crc)
         if cls.crc_body(body) != expected_crc:
             raise ValueError("CRC check failed")
 
     @classmethod
     def crc_body(cls, body: bytes):
-        crc = crc16(body)
-        return crc16_to_ascii_hex(crc)
+        return f"{crc16(body):0X}".encode("ascii")
 
     def _parse_adc(self):
         if self.adc and isinstance(self.adc, str):
@@ -246,10 +245,6 @@ class Protocol:
                                 date_time: Optional[datetime] = None,
                                 lat: Optional[float] = None,
                                 lon: Optional[float] = None,
-                                # lat_deg: Optional[float] = None,
-                                # lat_sign=None,
-                                # lon_deg: Optional[float] = None,
-                                # lon_sing=None,
                                 speed: Optional[int] = None,
                                 course: Optional[int] = None,
                                 alt: Optional[int] = None,
@@ -288,11 +283,7 @@ class Protocol:
     def build_packet(self, packet_type: PacketType, data=None) -> bytes:
         header = f"#{packet_type}#"
         body = (SEPARATOR.join(data) + ";").encode()
-
-        # crc = DevPacket.crc_body(body)
-
-        crc = crc16(body)
-        crc = f"{crc:0X}".encode("ascii")
+        crc = DevPacket.crc_body(body)
         return header.encode("ascii") + body + crc + b"\r\n"
 
     def parse_incoming_packet_from_dev(self, packet: bytes) -> Optional[DevPacket]:

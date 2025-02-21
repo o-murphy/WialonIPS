@@ -6,7 +6,14 @@ LAT_SIGN = Literal['N', 'S']
 LON_SIGN = Literal['E', 'W']
 
 # INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)(;(0x[0-9a-fA-F]+))?\r\n$"
-INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?(?=;0x[0-9a-fA-F]+)|.*?)?(?:;(0x[0-9a-fA-F]+))?\r\n$"
+# INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?(?=;0x[0-9a-fA-F]+)|.*?)?(?:;(0x[0-9a-fA-F]+))?\r\n$"
+# INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?(?=;[0-9a-f]+)|.*?)?(?:;([0-9a-f]+))?\r\n$"
+# INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)\r\n$"
+
+# INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?;)([0-9a-f]+)?\r\n$"
+INCOMING_PACKET_PATTERN = r"^#(\w+)#((.*?);)([0-9a-f]+)?\r\n$"
+# INCOMING_PACKET_PATTERN = r"^#(\w+)#((?:(.*?);)?)([0-9a-f]+)?\r\n$"
+
 
 INCOMING_PACKET_REGEX = re.compile(INCOMING_PACKET_PATTERN, re.IGNORECASE)
 
