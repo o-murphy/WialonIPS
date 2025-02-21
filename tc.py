@@ -5,6 +5,7 @@ from datetime import datetime
 
 import geocoder
 
+from wialonips.crc16 import crc16
 from wialonips.protocol import PacketType, DevPacket, Protocol
 
 
@@ -33,10 +34,11 @@ INCOMING_PACKET_FORMAT = "#{type}#{params}{crc}\r\n"
 
 login_body = ";".join(["2.0", IMEI, PASSWORD, ""]).encode('ascii')
 print(login_body)
+
 login_packet = {
     'type': PacketType.DEV_LOGIN.value,
     'params': login_body.decode('ascii'),
-    'crc': DevPacket.crc_body(login_body).decode('ascii')
+    'crc': f"{crc16(login_body):0X}"
 }
 
 login_packet = INCOMING_PACKET_FORMAT.format(**login_packet).encode('ascii')
