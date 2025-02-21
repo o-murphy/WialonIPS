@@ -57,12 +57,12 @@ class DevPacket:
             print("Couldn't parse incoming packet")
             return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
 
-        typ, body, _, crc = match.groups()
+        # typ, body, _, crc = match.groups()
+        typ, body, crc = match.groups()
         print(typ, body, crc)
 
         # if self.version.startswith("2") and crc is not None:
         if crc is not None:
-            print(body.encode('ascii'), crc.encode('ascii'))
             cls.crc_check((body+";").encode('ascii'), crc.encode('ascii'))
 
         params: list[str] = [None if value == NOT_AVAILABLE else value for value in body.split(";")]
@@ -286,12 +286,11 @@ class Protocol:
         return self.build_packet(PacketType.DEV_BLACKBOX, data=[data])
 
     def build_packet(self, packet_type: PacketType, data=None) -> bytes:
-        # header = f"#{packet_type}#{self.version}"
         header = f"#{packet_type}#"
-        packet = (header + SEPARATOR.join(data)).encode("ascii")
+        body = (SEPARATOR.join(data) + ";").encode()
 
-        crc = b""  # TODO:
-        return packet + crc + b"\r\n"
+        crc = DevPacket.crc_body(body)
+        return header.encode("ascii") + body + crc + b"\r\n"
 
     def parse_incoming_packet_from_dev(self, packet: bytes) -> Optional[DevPacket]:
         return DevPacket.parse_from_bytes(packet)
@@ -318,8 +317,6 @@ class Protocol:
             code = ExtendedDataResponseCode(code)
 
         elif _typ == PacketType.SRV_SHORT_DATA_RESPONSE:
-            print(other.split(";"))
-
             code = ShortDataResponseCode(code)
 
         elif _typ == PacketType.SRV_LOGIN_RESPONSE:
