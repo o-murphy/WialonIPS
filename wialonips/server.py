@@ -16,9 +16,7 @@ class DeviceCredentials:
 @dataclass
 class Device:
     connection: socket.socket
-    # server: Optional['Server'] = None
     credentials: DeviceCredentials
-    # credentials: Optional[DeviceCredentials] = field(init=False, default=None)
     protocol: Optional[Protocol] = field(init=False, default=None)
 
     def __post_init__(self):
@@ -26,37 +24,17 @@ class Device:
 
     def on_message_received(self, packet: DevPacket):
 
-        # def on_message_received(self, message: bytes):
-        #     packet = self.protocol.parse_incoming_packet(message)
-        #     print(packet)
-
-        if packet.Type == PacketType.DEV_LOGIN:
+        if packet.type == PacketType.DEV_LOGIN:
             self.on_login(packet)
-        elif packet.Type == PacketType.DEV_EXTENDED_DATA:
+        elif packet.type == PacketType.DEV_EXTENDED_DATA:
             self.on_extended(packet)
-        elif packet.Type == PacketType.DEV_SHORT_DATA:
+        elif packet.type == PacketType.DEV_SHORT_DATA:
             self.on_short(packet)
+        elif packet.type == PacketType.DEV_PING:
+            self.on_ping(packet)
 
     def on_login(self, packet):
         raise NotImplementedError
-
-    #
-    # def on_login(self, packet):
-    #
-    #     if packet.imei in self.server.active_imeis:
-    #         self.connection.send(b"#AL#0\r\n")  # Reject the connection
-    #         raise PermissionError(f"Device {packet.imei} already connected, rejecting login")
-    #     if packet.imei not in self.server.devices:
-    #         self.connection.send(b"#AL#01\r\n")  # Reject the connection
-    #         raise PermissionError(f"Device {packet.imei} not registered")
-    #     if self.server.devices[packet.imei].PASSWORD != packet.password:
-    #         self.connection.send(b"#AL#01\r\n")
-    #         raise PermissionError(f"Wrong password for device {packet.imei}")
-    #
-    #     self.connection.send(b"#AL#1\r\n")
-    #     self.credentials = DeviceCredentials(packet.imei, packet.password)
-    #
-    #     print(f"Device {packet.imei} authenticated")
 
     def on_short(self, packet: DevPacket):
         self.connection.send(b'#AD#1\r\n')
@@ -64,77 +42,59 @@ class Device:
     def on_extended(self, packet: DevPacket):
         self.connection.send(b'#AD#1\r\n')
 
-    @classmethod
-    def on_ping(cls):
-        raise NotImplementedError
+    def on_ping(self, packet: DevPacket):
+        self.connection.send(b'#AP#\r\n')
 
-    @classmethod
-    def query_stream(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def stop_stream(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_stream_block(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def query_video(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def stop_video(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_video_block(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def query_video_list(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def upload_software(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def upload_configuration(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def driver_message(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_driver_message(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def query_image(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_image(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def query_ddd_info(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_ddd_info(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def on_ddd_block(cls):
-        raise NotImplementedError
-
-    @classmethod
-    def custom(cls):
-        raise NotImplementedError
+    # def query_stream(self):
+    #     raise NotImplementedError
+    #
+    # def stop_stream(self):
+    #     raise NotImplementedError
+    #
+    # def on_stream_block(self):
+    #     raise NotImplementedError
+    #
+    # def query_video(self):
+    #     raise NotImplementedError
+    #
+    # def stop_video(self):
+    #     raise NotImplementedError
+    #
+    # def on_video_block(self):
+    #     raise NotImplementedError
+    #
+    # def query_video_list(self):
+    #     raise NotImplementedError
+    #
+    # def upload_software(self):
+    #     raise NotImplementedError
+    #
+    # def upload_configuration(self):
+    #     raise NotImplementedError
+    #
+    # def driver_message(self):
+    #     raise NotImplementedError
+    #
+    # def on_driver_message(self):
+    #     raise NotImplementedError
+    #
+    # def query_image(self):
+    #     raise NotImplementedError
+    #
+    # def on_image(self):
+    #     raise NotImplementedError
+    #
+    # def query_ddd_info(self):
+    #     raise NotImplementedError
+    #
+    # def on_ddd_info(self):
+    #     raise NotImplementedError
+    #
+    # def on_ddd_block(self):
+    #     raise NotImplementedError
+    #
+    # def custom(self):
+    #     raise NotImplementedError
 
 
 class Server:
@@ -152,7 +112,6 @@ class Server:
         print(f"Connected by {addr}")
         device_imei = None
         dev = None
-        # dev = Device(conn, server)
 
         try:
             while True:
@@ -163,13 +122,11 @@ class Server:
 
                 print(f"Received from {addr}: {data.decode()}")
 
-                # dev.on_message_received(data)
-
                 message = self.protocol.parse_incoming_packet(data)
                 print(message)
 
                 # Handle DEV_LOGIN only once, then bind the device
-                if message.Type == PacketType.DEV_LOGIN:
+                if message.type == PacketType.DEV_LOGIN:
                     if message.imei in self.active_imeis:
                         print(f"Device {message.imei} already connected, rejecting login")
                         conn.send(b"#AL#0\r\n")  # Reject the connection
@@ -197,18 +154,12 @@ class Server:
                 elif device_imei and dev and self.devices.get(device_imei):
                     print(f"Processing message for device {device_imei}")
                     # Handle any message that is not a DEV_LOGIN
-                    # For example, you can check for other packet types and handle them here
-                    # if r.Type == PacketType.SOME_OTHER_TYPE:
-                    #     pass
                     dev.on_message_received(message)
-
 
                 else:
                     print(f"Device not authenticated yet, ignoring message from {addr}")
                     # continue
                     break
-
-                # conn.sendall(data)  # Echo data back to client
 
         finally:
             if device_imei:
@@ -252,5 +203,3 @@ if __name__ == "__main__":
     server.register_device(dev1)
     server.register_device(dev2)
     server.run()
-    # if r.imei != "65432" or r.password != "65432":
-    #     conn.send(b"#AL#0\r\n")

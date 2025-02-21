@@ -1,8 +1,77 @@
 import re
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any, Literal, Union, NamedTuple, get_type_hints
+from typing import Optional, Any, Literal, Union, NamedTuple, Dict, List
+
+from wialonips.crc16 import crc16, crc16_to_ascii_hex
+
+INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)(0x[0-9a-fA-F]+)?\r\n$"
+INCOMING_PACKET_REGEX = re.compile(INCOMING_PACKET_PATTERN, re.IGNORECASE)
+
+LAT_SIGN = Literal['N', 'S']
+LON_SIGN = Literal['E', 'W']
+
+SEPARATOR = ";"
+NOT_AVAILABLE = "NA"
+ALARM_PARAM = "SOS"
+# LBS_MMC_PARAM = "mcc%d"
+LBS_MMC_PARAM = "mcc"
+# LBS_MNC_PARAM = "mnc%d"
+LBS_MNC_PARAM = "mnc"
+# LBS_LAC_PARAM = "lac%d"
+LBS_LAC_PARAM = "lac"
+# LBS_CELL_ID_PARAM = "cell_id%d"
+LBS_CELL_ID_PARAM = "cell_id"
+WIFI_MAC_PARAM = "wifi_mac_%d"
+WIFI_RSSI_PARAM = "wifi_rssi_%d"
+
+ParamValueTypes = {
+    1: int,
+    2: float,
+    3: str,
+}
+
+
+class LoginBody(NamedTuple):
+    imei: str
+    password: str
+
+
+class PingBody(NamedTuple):
+    pass
+
+
+class ShortDataBody(NamedTuple):
+    date: int
+    time: int
+    lat_deg: int
+    lat_sign: str
+    lon_deg: int
+    lon_sign: str
+    speed: int
+    course: int
+    alt: int
+    sats: int
+
+
+class FullDataBody(NamedTuple):
+    date: int
+    time: int
+    lat_deg: int
+    lat_sign: str
+    lon_deg: int
+    lon_sign: str
+    speed: int
+    course: int
+    alt: int
+    sats: int
+    hdop: int
+    inputs: int
+    outputs: int
+    adc: int
+    ibutton: int
+    params: int
 
 
 class PacketType(str, Enum):
@@ -83,29 +152,12 @@ class ShortDataResponseCode(str, Enum):
     CRC_ERROR = "13"
 
 
-SEPARATOR = ";"
-NOT_AVAILABLE = "NA"
-ALARM_PARAM = "SOS"
-LBS_MMC_PARAM = "mcc%d"
-LBS_MNC_PARAM = "mnc%d"
-LBS_LAC_PARAM = "lac%d"
-LBS_CELL_ID_PARAM = "cell_id%d"
-WIFI_MAC_PARAM = "wifi_mac_%d"
-WIFI_RSSI_PARAM = "wifi_rssi_%d"
-
-ParamValueTypes = {
-    1: int,
-    2: float,
-    3: str,
-}
-
-
 def parse_datetime(date_str: str, time_str: str) -> datetime:
     """Convert YYMMDD and HHMMSS into a datetime object."""
     return datetime.strptime(date_str + time_str, "%y%m%d%H%M%S")
 
 
-def dms_to_decimal(deg_min: str, sign: Union[Literal['N', 'S'], Literal['E', 'W']]) -> float:
+def dms_to_decimal(deg_min: str, sign: Union[LAT_SIGN, LON_SIGN]) -> float:
     """Convert a coordinate in DDMM.MMMM format to decimal degrees."""
     if len(deg_min) < 6:
         raise ValueError("Invalid coordinate format")
@@ -131,11 +183,12 @@ class Position(NamedTuple):
     latitude: float
     longitude: float
 
+
 @dataclass
 class DevPacket:
-    Type: Optional[PacketType] = None
-    Code: Optional[Any] = None
-    RAW: Optional[bytes] = None
+    type: Optional[PacketType] = None
+    code: Optional[Any] = None
+    raw: Optional[bytes] = None
 
     imei: Optional[str] = None
     password: Optional[str] = None
@@ -143,9 +196,9 @@ class DevPacket:
     date: Optional[int] = None
     time: Optional[int] = None
     lat_deg: Optional[float] = None
-    lat_sign: Optional[Literal['N', 'S']] = None
+    lat_sign: Optional[LAT_SIGN] = None
     lon_deg: Optional[float] = None  # GGGMM.MM
-    lon_sign: Optional[Literal['E', 'W']] = None
+    lon_sign: Optional[LON_SIGN] = None
     speed: Optional[int] = None
     course: Optional[int] = None
     alt: Optional[int] = None
@@ -154,19 +207,85 @@ class DevPacket:
     hdop: Optional[float] = 1.0
     inputs: Optional[int] = None
     outputs: Optional[int] = None
-    adc: Optional[list[float]] = ""
+    adc: Optional[List[float]] = field(default_factory=list)
     ibutton: Optional[str] = None
+
     alarm: bool = False
 
-    params: Optional[dict[str, str]] = None
+    params: Dict[str, str] = field(default_factory=dict)
+
+    lbs: Dict[str, Union[float, int]] = field(init=False, default_factory=dict)
 
     def __post_init__(self):
-        self._parse_params()
         self._parse_adc()
+        self._parse_params()
+
+    @classmethod
+    def parse_from_bytes(cls, packet: bytes) -> "DevPacket":
+        try:
+            _packet = packet.decode('ascii')
+        except UnicodeDecodeError:
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
+
+        match = INCOMING_PACKET_REGEX.fullmatch(_packet)
+
+        if not match:
+            print("Couldn't parse incoming packet")
+            return DevPacket(None, LoginResponseCode.ERROR, packet)
+
+        typ, body, crc = match.groups()
+        print(typ, body, crc)
+
+        # if self.version.startswith("2") and crc is not None:
+        if crc is not None:
+            cls.crc_check(body.encode('ascii'), crc.encode('ascii'))
+
+        params: list[str] = [None if value == NOT_AVAILABLE else value for value in body.split(";")]
+
+        try:
+            _typ = PacketType(typ)
+        except KeyError:
+            return cls(None, None, packet)
+
+        if _typ == PacketType.DEV_LOGIN:
+            format_ = LoginBody
+
+        elif _typ == PacketType.DEV_EXTENDED_DATA:
+            format_ = FullDataBody
+
+        elif _typ == PacketType.DEV_SHORT_DATA:
+            format_ = ShortDataBody
+
+        elif _typ == PacketType.DEV_PING:
+            format_ = PingBody
+
+        # elif _typ == PacketType.DEV_BLACKBOX:
+        #     print(params.split("|"))
+        #     params =
+
+        else:
+            format_ = NamedTuple("UndefinedPacket", [])
+
+        _kwargs = format_(*params)._asdict()
+
+        return cls(_typ, None, packet, **_kwargs)
+
+    @classmethod
+    def crc_check(cls, body: bytes, expected_crc: bytes):
+        if cls.crc_body(body) != expected_crc:
+            raise ValueError("CRC check failed")
+
+    @classmethod
+    def crc_body(cls, body: bytes):
+        crc = crc16(body)
+        return crc16_to_ascii_hex(crc)
 
     def _parse_adc(self):
         if self.adc and isinstance(self.adc, str):
-            self.adc = [float(adc) for adc in self.adc.split(",")]
+            try:
+                self.adc = [float(adc) for adc in self.adc.split(",")]
+            except ValueError:
+                print("Invalid ADC format")
 
     def _parse_params(self) -> None:
         if self.params and isinstance(self.params, str):
@@ -179,17 +298,23 @@ class DevPacket:
                 if typ.isdigit() and (_typ := ParamValueTypes.get(int(typ))):
                     try:
                         _params[key] = None if value == NOT_AVAILABLE else _typ(value)
-                    except TypeError:
+                    except (ValueError, TypeError):
+                        print(f"Invalid param format {key}.{_typ}.{value}")
                         _params[key] = value
 
+            # if alarm
             if ALARM_PARAM in _params:
-                self.alarm = True
-                _params.pop(ALARM_PARAM)
+                self.alarm = _params.pop(ALARM_PARAM) == 1
+
+            # if lbs
+            for key, value in _params.items():
+                if key.startswith((LBS_MMC_PARAM, LBS_MNC_PARAM, LBS_LAC_PARAM, LBS_CELL_ID_PARAM)):
+                    try:
+                        self.lbs[key] = _params.pop(key)
+                    except (ValueError, TypeError):
+                        print(f"Invalid LBS Params format {key}: {value}")
 
             self.params = _params
-
-        else:
-            self.params = None
 
     @property
     def datetime(self):
@@ -205,10 +330,23 @@ class DevPacket:
                 dms_to_decimal(str(self.lon_deg), self.lon_sign),
             )
 
+    @property
+    def inputs_list(self):
+        return self._map_io(self.inputs)
 
+    @property
+    def outputs_list(self):
+        return self._map_io(self.outputs)
 
-
-
+    @staticmethod
+    def _map_io(field):
+        if field:
+            if isinstance(field, str) and field.isdigit():
+                mask = int(field)
+                return [int(bit) for bit in bin(mask)[2:].zfill(32)][::-1]
+            elif isinstance(field, list) and all(isinstance(item, int) for item in field):
+                return field
+        return []
 
 
 def _stringify(object):
@@ -229,9 +367,9 @@ class Protocol:
     def build_data_packet(self,
                           date_time: Optional[datetime] = None,
                           lat_deg: Optional[float] = None,  # GGMM.MM
-                          lat_sign=Optional[Literal['N', 'S']],
+                          lat_sign=Optional[LAT_SIGN],
                           lon_deg: Optional[float] = None,  # GGGMM.MM
-                          lon_sing=Optional[Literal['E', 'W']],
+                          lon_sing=Optional[LON_SIGN],
                           speed: Optional[int] = None,
                           course: Optional[int] = None,
                           alt: Optional[int] = None,
@@ -325,78 +463,7 @@ class Protocol:
         return packet + crc + b"\r\n"
 
     def parse_incoming_packet(self, packet: bytes) -> Optional[DevPacket]:
-        try:
-            _packet = packet.decode('ascii')
-        except UnicodeDecodeError:
-            return DevPacket(None, LoginResponseCode.ERROR, packet)
-
-        match = re.match(r"#(\w+)#(.*)\r\n", _packet, re.IGNORECASE)
-        if not match:
-            print("Couldn't parse incoming packet")
-            return DevPacket(None, LoginResponseCode.ERROR, packet)
-
-        typ, params, *other = match.groups()
-        _params: list[str] = [None if value == NOT_AVAILABLE else value for value in params.split(";")]
-
-        try:
-            _typ = PacketType(typ)
-        except KeyError:
-            return DevPacket(None, None, packet)
-
-
-        if _typ == PacketType.DEV_LOGIN:
-            format_ = NamedTuple("LoginPacket", [
-                ('imei', str),
-                ("password", str)
-            ])
-
-        elif _typ == PacketType.DEV_EXTENDED_DATA:
-            format_ = NamedTuple("FullDataPacket", [
-                ('date', int),
-                ("time", int),
-                ("lat_deg", int),
-                ("lat_sign", str),
-                ("lon_deg", int),
-                ("lon_sign", str),
-                ("speed", int),
-                ("course", int),
-                ("alt", int),
-                ("sats", int),
-                ("hdop", int),
-                ("inputs", int),
-                ("outputs", int),
-                ("adc", int),
-                ("ibutton", int),
-                ("params", int),
-            ])
-
-        elif _typ == PacketType.DEV_SHORT_DATA:
-            format_ = NamedTuple("FullDataPacket", [
-                ('date', int),
-                ("time", int),
-                ("lat_deg", int),
-                ("lat_sign", str),
-                ("lon_deg", int),
-                ("lon_sign", str),
-                ("speed", int),
-                ("course", int),
-                ("alt", int),
-                ("sats", int),
-            ])
-
-        elif _typ == PacketType.DEV_PING:
-            format_ = NamedTuple("PingPacket", [])
-
-        # elif _typ == PacketType.DEV_BLACKBOX:
-        #     print(params.split("|"))
-        #     params =
-
-        else:
-            format_ = NamedTuple("UndefinedPacket", [])
-
-        _kwargs = format_(*_params)._asdict()
-
-        return DevPacket(_typ, None, packet, **_kwargs)
+        return DevPacket.parse_from_bytes(packet)
 
     def parse_upcoming_packet(self, packet: bytes) -> Optional[DevPacket]:
         try:
@@ -435,9 +502,26 @@ class Protocol:
 
 if __name__ == "__main__":
     p = Protocol()
-    r = p.parse_upcoming_packet(b"#AD#15.1\r\n")
-    print(r)
-    r = p.parse_upcoming_packet(b"#AL#1\r\n")
-    print(r)
-    r = p.parse_upcoming_packet(b'#AB#\r\n')
-    print(r)
+    # r = p.parse_upcoming_packet(b"#AD#15.1\r\n")
+    # print(r)
+    # r = p.parse_upcoming_packet(b"#AL#1\r\n")
+    # print(r)
+    # r = p.parse_upcoming_packet(b'#AB#\r\n')
+    # print(r)
+
+    if __name__ == "__main__":
+        head = b'#SD#'
+        body = b'210225;092758;5355.09260;N;02732.40990;E;0;0;300;7'
+        crc = p.crc_data(body)
+        end = b'\r\n'
+        buf = head + body + crc + end
+        print(buf)
+
+        pack = p.parse_incoming_packet(head + body + end)
+        print(pack)
+
+        pack = p.parse_incoming_packet(buf)
+        print(pack)
+
+        buf = b'#D#210225;095553;5355.09260;N;02732.40990;E;0;0;300;7;1;2;18432;5,0;NA;a:1:5,b:3:NA\r\n'
+        print(p.parse_incoming_packet(buf))
