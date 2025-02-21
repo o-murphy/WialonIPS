@@ -8,6 +8,8 @@ import geocoder
 from wialonips.crc16 import crc16
 from wialonips.protocol import PacketType, Protocol
 
+# TODO: push text="hello from WialonIPS and url to repo"
+
 # HOST = "127.0.0.1"
 # PORT = 65432
 
