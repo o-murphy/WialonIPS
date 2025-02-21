@@ -1,192 +1,15 @@
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional, Any, Literal, Union, NamedTuple, Dict, List
+from typing import Optional, Any, Union, Dict, List
 
 from wialonips.crc16 import crc16, crc16_to_ascii_hex
-
-INCOMING_PACKET_PATTERN = r"^#(\w+)#(.*?)(0x[0-9a-fA-F]+)?\r\n$"
-INCOMING_PACKET_REGEX = re.compile(INCOMING_PACKET_PATTERN, re.IGNORECASE)
-
-LAT_SIGN = Literal['N', 'S']
-LON_SIGN = Literal['E', 'W']
-
-SEPARATOR = ";"
-NOT_AVAILABLE = "NA"
-ALARM_PARAM = "SOS"
-# LBS_MMC_PARAM = "mcc%d"
-LBS_MMC_PARAM = "mcc"
-# LBS_MNC_PARAM = "mnc%d"
-LBS_MNC_PARAM = "mnc"
-# LBS_LAC_PARAM = "lac%d"
-LBS_LAC_PARAM = "lac"
-# LBS_CELL_ID_PARAM = "cell_id%d"
-LBS_CELL_ID_PARAM = "cell_id"
-WIFI_MAC_PARAM = "wifi_mac_%d"
-WIFI_RSSI_PARAM = "wifi_rssi_%d"
-
-ParamValueTypes = {
-    1: int,
-    2: float,
-    3: str,
-}
-
-
-class LoginBody(NamedTuple):
-    imei: str
-    password: str
-
-
-class PingBody(NamedTuple):
-    pass
-
-
-class ShortDataBody(NamedTuple):
-    date: int
-    time: int
-    lat_deg: int
-    lat_sign: str
-    lon_deg: int
-    lon_sign: str
-    speed: int
-    course: int
-    alt: int
-    sats: int
-
-
-class FullDataBody(NamedTuple):
-    date: int
-    time: int
-    lat_deg: int
-    lat_sign: str
-    lon_deg: int
-    lon_sign: str
-    speed: int
-    course: int
-    alt: int
-    sats: int
-    hdop: int
-    inputs: int
-    outputs: int
-    adc: int
-    ibutton: int
-    params: int
-
-
-class PacketType(str, Enum):
-    DEV_LOGIN = "L"
-    SRV_LOGIN_RESPONSE = "AL"
-    DEV_SHORT_DATA = "SD"
-    SRV_SHORT_DATA_RESPONSE = "ASD"
-    DEV_EXTENDED_DATA = "D"
-    SRV_EXTENDED_DATA_RESPONSE = "AD"
-    DEV_BLACKBOX = "B"
-    SRV_BLACKBOX_RESPONSE = "AB"
-
-    SRV_VIDEO_STREAM_QUERY = "QLV"
-    DEV_VIDEO_STREAM = "LV"
-
-    SRV_VIDEO_RECORD_QUERY = "QPB"
-    DEV_VIDEO_RECORD = "PB"
-
-    SRV_VIDEO_STREAM_STOP_QUERY = "QVS"
-    DEV_VIDEO_STREAM_STOP = "VS"
-
-    SRV_VIDEO_FILE_QUERY = "QVF"
-    DEV_VIDEO_FILE = "VF"
-
-    SRV_VIDEO_FILE_LIST_QUERY = "QTM"
-    DEV_VIDEO_FILE_LIST_RESPONSE = "TM"
-
-    DEV_PING = "P"
-    SRV_PING = "AP"
-
-    SRV_UPLOAD_SOFTWARE = "US"
-    SRV_UPLOAD_CONFIGURATION = "UC"
-
-    DRV_MESSAGE = "M"
-    SRV_DRV_MESSAGE_RESPONSE = "AM"
-
-    SRV_IMAGE_QUERY = "QI"
-    DEV_IMAGE = "I"
-    SRV_IMAGE_RESPONSE = "AI"
-
-    SRV_DDD_QUERY = "QT"
-    DEV_DDD_INFO = "IT"
-
-    SRV_DDD_INFO_RESPONSE = "AIT"
-    DEV_DDD = "T"
-    SRV_DDD_RESPONSE = "AT"
-
-
-class LoginResponseCode(str, Enum):
-    OK = "1"
-    ERROR = "0"
-    AUTH_ERROR = "01"
-    CRC_ERROR = "10"
-
-
-class ExtendedDataResponseCode(str, Enum):
-    STRUCT_ERROR = "-1"
-    INVALID_TIMESTAMP = "0"
-    OK = "1"
-    COORDINATE_ERROR = "10"
-    MOVE_PROPS_ERROR = "11"
-    SATS_ERROR = "12"
-    IO_PROPS_ERROR = "13"
-    ADC_PROPS_ERROR = "14"
-    PARAMS_ERROR = "15"
-    PARAM_NAME_LEN_ERROR = "15.1"
-    PARAM_NAME_ERROR = "15.2"
-    CRC_ERROR = "16"
-
-
-class ShortDataResponseCode(str, Enum):
-    STRUCT_ERROR = "-1"
-    INVALID_TIMESTAMP = "0"
-    OK = "1"
-    COORDINATE_ERROR = "10"
-    MOVE_PROPS_ERROR = "11"
-    SATS_ERROR = "12"
-    CRC_ERROR = "13"
-
-
-def parse_datetime(date_str: str, time_str: str) -> datetime:
-    """Convert YYMMDD and HHMMSS into a datetime object."""
-    return datetime.strptime(date_str + time_str, "%y%m%d%H%M%S")
-
-
-def dms_to_decimal(deg_min: str, sign: Union[LAT_SIGN, LON_SIGN]) -> float:
-    """Convert a coordinate in DDMM.MMMM format to decimal degrees."""
-    if len(deg_min) < 6:
-        raise ValueError("Invalid coordinate format")
-
-    # Determine number of degrees (2 digits for latitude, 3 for longitude)
-    deg_length = 2 if sign in "NS" else 3
-
-    # Split degrees and minutes
-    degrees = int(deg_min[:deg_length])
-    minutes = float(deg_min[deg_length:])
-
-    # Convert to decimal degrees
-    decimal = degrees + (minutes / 60)
-
-    # Apply sign for South/West
-    if sign in "SW":
-        decimal = -decimal
-
-    return decimal
-
-
-class Position(NamedTuple):
-    latitude: float
-    longitude: float
+from wialonips.types import *
+from wialonips.utils import parse_datetime, dms_to_decimal, decimal_to_ddmm
 
 
 @dataclass
 class DevPacket:
-    type: Optional[PacketType] = None
+    type: PacketType
     code: Optional[Any] = None
     raw: Optional[bytes] = None
 
@@ -225,13 +48,13 @@ class DevPacket:
         try:
             _packet = packet.decode('ascii')
         except UnicodeDecodeError:
-            return DevPacket(None, LoginResponseCode.ERROR, packet)
+            return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
 
         match = INCOMING_PACKET_REGEX.fullmatch(_packet)
 
         if not match:
             print("Couldn't parse incoming packet")
-            return DevPacket(None, LoginResponseCode.ERROR, packet)
+            return DevPacket(PacketType.UNKNOWN, LoginResponseCode.ERROR, packet)
 
         typ, body, crc = match.groups()
         print(typ, body, crc)
@@ -245,7 +68,7 @@ class DevPacket:
         try:
             _typ = PacketType(typ)
         except KeyError:
-            return cls(None, None, packet)
+            return cls(PacketType.UNKNOWN, None, packet)
 
         if _typ == PacketType.DEV_LOGIN:
             format_ = LoginBody
@@ -320,7 +143,9 @@ class DevPacket:
     def datetime(self):
         if self.date and self.time:
             return parse_datetime(str(self.date), str(self.time))
-        raise ValueError("Unable to parse date and time")
+        return datetime.now()
+
+        # raise ValueError("Unable to parse date and time")
 
     @property
     def pos(self):
@@ -417,10 +242,12 @@ class Protocol:
 
     def build_short_data_packet(self,
                                 date_time: Optional[datetime] = None,
-                                lat_deg: Optional[float] = None,
-                                lat_sign=None,
-                                lon_deg: Optional[float] = None,
-                                lon_sing=None,
+                                lat: Optional[float] = None,
+                                lon: Optional[float] = None,
+                                # lat_deg: Optional[float] = None,
+                                # lat_sign=None,
+                                # lon_deg: Optional[float] = None,
+                                # lon_sing=None,
                                 speed: Optional[int] = None,
                                 course: Optional[int] = None,
                                 alt: Optional[int] = None,
@@ -432,18 +259,23 @@ class Protocol:
         else:
             date, time = None, None
 
-        if not (0 <= course < 360):
-            raise ValueError("Course must be between 0 and 360")
+        if course is not None and not (0 <= course < 360):
+            course = None
 
         if speed is not None and speed < 0:
-            raise ValueError("Speed must be positive")
+            speed = None
 
         if sats is not None and sats < 0:
-            raise ValueError("Sats must be positive")
-        else:
-            sats = NOT_AVAILABLE
+            sats = None
 
-        data = [_stringify(i) for i in (date, time, lat_deg, lat_sign, lon_deg, lon_sing,
+        if lat is None or lon is None:
+            lat_deg, lon_deg = None, None
+            lat_sign, lon_sign = None, None
+        else:
+            lat_deg, lat_sign = decimal_to_ddmm(lat, True)
+            lon_deg, lon_sign = decimal_to_ddmm(lon, False)
+
+        data = [_stringify(i) for i in (date, time, lat_deg, lat_sign, lon_deg, lon_sign,
                                         speed, course, alt, sats)]
         return self.build_packet(PacketType.DEV_SHORT_DATA, data=data)
 
@@ -452,17 +284,14 @@ class Protocol:
         return self.build_packet(PacketType.DEV_BLACKBOX, data=[data])
 
     def build_packet(self, packet_type: PacketType, data=None) -> bytes:
-        header = f"#{packet_type}#{self.version}"
-        if data:
-            data = SEPARATOR.join([header, *data])
-            packet = SEPARATOR.join([header, data]).encode("ascii")
-        else:
-            packet = header.encode("ascii")
+        # header = f"#{packet_type}#{self.version}"
+        header = f"#{packet_type}#"
+        packet = (header + SEPARATOR.join(data)).encode("ascii")
 
         crc = b""  # TODO:
         return packet + crc + b"\r\n"
 
-    def parse_incoming_packet(self, packet: bytes) -> Optional[DevPacket]:
+    def parse_incoming_packet_from_dev(self, packet: bytes) -> Optional[DevPacket]:
         return DevPacket.parse_from_bytes(packet)
 
     def parse_upcoming_packet(self, packet: bytes) -> Optional[DevPacket]:
@@ -510,18 +339,5 @@ if __name__ == "__main__":
     # print(r)
 
     if __name__ == "__main__":
-        head = b'#SD#'
-        body = b'210225;092758;5355.09260;N;02732.40990;E;0;0;300;7'
-        crc = p.crc_data(body)
-        end = b'\r\n'
-        buf = head + body + crc + end
-        print(buf)
-
-        pack = p.parse_incoming_packet(head + body + end)
-        print(pack)
-
-        pack = p.parse_incoming_packet(buf)
-        print(pack)
-
         buf = b'#D#210225;095553;5355.09260;N;02732.40990;E;0;0;300;7;1;2;18432;5,0;NA;a:1:5,b:3:NA\r\n'
-        print(p.parse_incoming_packet(buf))
+        print(p.parse_incoming_packet_from_dev(buf))

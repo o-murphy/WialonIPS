@@ -23,7 +23,6 @@ class Device:
         self.protocol = Protocol()
 
     def on_message_received(self, packet: DevPacket):
-
         if packet.type == PacketType.DEV_LOGIN:
             self.on_login(packet)
         elif packet.type == PacketType.DEV_EXTENDED_DATA:
@@ -122,8 +121,8 @@ class Server:
 
                 print(f"Received from {addr}: {data.decode()}")
 
-                message = self.protocol.parse_incoming_packet(data)
-                print(message)
+                message = self.protocol.parse_incoming_packet_from_dev(data)
+                print(device_imei, message.datetime, message.type.name)
 
                 # Handle DEV_LOGIN only once, then bind the device
                 if message.type == PacketType.DEV_LOGIN:
@@ -192,14 +191,10 @@ class Server:
             raise Exception(f"Device {device.IMEI} not registered")
         self.devices.pop(device.IMEI)
 
-    def on_message_received(self, msg: bytes):
-        raise NotImplementedError
-
 
 if __name__ == "__main__":
     server = Server()
-    dev1 = DeviceCredentials("65432", "65432")
-    dev2 = DeviceCredentials("111111", "222222")
-    server.register_device(dev1)
-    server.register_device(dev2)
+    server.register_device(DeviceCredentials("65432", "65432"))
+    server.register_device(DeviceCredentials("111111", "222222"))
+    server.register_device(DeviceCredentials("wips", "wips"))
     server.run()
