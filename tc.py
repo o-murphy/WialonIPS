@@ -17,7 +17,7 @@ PASSWORD = "wips"
 
 INCOMING_PACKET_FORMAT = "#{type}#{params}{crc}\r\n"
 
-login_body = ";".join([IMEI, PASSWORD]).encode('ascii')
+login_body = ";".join(["2.0", IMEI, PASSWORD]).encode('ascii')
 
 login_packet = {
     'type': PacketType.DEV_LOGIN.value,
@@ -25,10 +25,14 @@ login_packet = {
     'crc': DevPacket.crc_body(login_body).decode('ascii')
 }
 
+login_packet = INCOMING_PACKET_FORMAT.format(**login_packet).encode('ascii')
+print(login_packet)
+
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
     client_socket.connect((HOST, PORT))  # Connect to server
+
     client_socket.send(
-        INCOMING_PACKET_FORMAT.format(**login_packet).encode('ascii')
+        login_packet
     )  # Send data
     print("Sent")
     data = client_socket.recv(1024)  # Receive response
