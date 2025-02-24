@@ -3,7 +3,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional, Dict
 
-from wialonips.protocol import Protocol, PacketType, DevPacket
+from _wialonips.protocol import Protocol, PacketType, DevPacket
 
 
 @dataclass

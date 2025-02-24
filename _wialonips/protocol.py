@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, Any, Union, Dict, List
 
-from wialonips.crc16 import crc16
-from wialonips.types import *
-from wialonips.utils import parse_datetime, dms_to_decimal, decimal_to_ddmm
+from _wialonips.crc16 import crc16
+from _wialonips.types import *
+from _wialonips.utils import parse_datetime, dms_to_decimal, decimal_to_ddmm
 
 
 @dataclass

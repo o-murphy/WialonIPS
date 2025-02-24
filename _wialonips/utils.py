@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Union, Tuple
 
-from wialonips.types import LAT_SIGN, LON_SIGN
+from _wialonips.types import LAT_SIGN, LON_SIGN
 
 
 def parse_datetime_with_nanoseconds(date_str: str, time_str: str):

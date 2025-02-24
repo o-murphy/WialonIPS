@@ -5,8 +5,8 @@ from datetime import datetime
 
 import geocoder
 
-from wialonips.crc16 import crc16
-from wialonips.protocol import PacketType, Protocol
+from _wialonips.crc16 import crc16
+from _wialonips.protocol import PacketType, Protocol
 
 # TODO: push text="hello from WialonIPS and url to repo"
 
