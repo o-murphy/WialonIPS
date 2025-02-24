@@ -2,16 +2,17 @@ import heapq
 from dataclasses import dataclass, field
 from fsm import Record
 from datetime import datetime
-import json
+import ujson
 
-CACHE_FILE = "blackbox_heap.json"
+CACHE_FILE = "blackbox.json"
 
 
 @dataclass(order=True)
 class PrioritizedRecord:
     priority: int
     timestamp: int
-    record: Record = field(compare=False)  # Exclude `Record` from sorting
+    # record: Record = field(compare=False)  # Exclude `Record` from sorting
+    record: str = field(compare=False)  # Exclude `Record` from sorting
 
 
 @dataclass
@@ -26,7 +27,8 @@ class BlackBox:
         timestamp = int(datetime.now().timestamp())
         priority = -r.priority
         heapq.heappush(
-            self.queue, PrioritizedRecord(priority, timestamp, r)
+            # self.queue, PrioritizedRecord(priority, timestamp, r)
+            self.queue, PrioritizedRecord(priority, timestamp, r.full) # TODO: raw msg
         )  # Negative priority for max-heap
         self._save_to_file()
 
@@ -50,11 +52,15 @@ class BlackBox:
         """Завантаження подій з файлу при старті."""
         try:
             with open(CACHE_FILE, "r") as f:
-                data = json.load(f)
+                data = ujson.load(f)
                 for item in data:
-                    record = Record(**item['record'])  # Відновлюємо об'єкт Record
-                    timestamp = int(item["timestamp"])  # Час зберігається в timestamp
-                    priority = item["priority"]
+                    # record = Record(**item['record'])  # Відновлюємо об'єкт Record
+                    # record = item['record']  # TODO: raw msg
+                    # timestamp = int(item["timestamp"])  # Час зберігається в timestamp
+                    # priority = item["priority"]
+                    record = item['r']  # TODO: raw msg
+                    timestamp = int(item["p"])  # Час зберігається в timestamp
+                    priority = item["t"]
                     heapq.heappush(self.queue, PrioritizedRecord(priority, timestamp, record))
         except (OSError, ValueError):
             pass  # Якщо файл відсутній або пошкоджений
@@ -63,10 +69,14 @@ class BlackBox:
         """Збереження черги в файл."""
         with open(CACHE_FILE, "w") as f:
             # Записуємо записи в черзі у файл
-            json.dump([{
-                "record": r.record.__dict__,
-                "priority": r.priority,
-                "timestamp": r.timestamp
+            ujson.dump([{
+                # "record": r.record.__dict__,
+                # "record": r.record,  # TODO: raw msg
+                # "priority": r.priority,
+                # "timestamp": r.timestamp
+                "r": r.record,  # TODO: raw msg
+                "p": r.priority,
+                "t": r.timestamp
             } for r in self.queue], f)
 
 # Usage

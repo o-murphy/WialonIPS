@@ -140,7 +140,8 @@ class Device:
     def send_records(self):
         while len(self.blackbox.queue) > 0:
             for rec in self.blackbox.peek(1):
-                body = rec.full
+                # body = rec.full
+                body = rec # TODO: raw msg
                 packet = DATA_QUERY_FMT.format(
                     body=body,
                     crc=crc(body.encode(ENCODING))
